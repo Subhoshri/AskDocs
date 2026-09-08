@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 
-API_URL = "http://127.0.0.1:8000"
+API_URL = "https://127.0.0.1:8000"
 
 st.set_page_config(
     page_title="AskDocs",
@@ -9,19 +9,13 @@ st.set_page_config(
     layout="wide"
 )
 
-
-st.title("📚 AskDocs")
+st.title("AskDocs")
 st.caption(
     "AI-powered document question-answering with "
     "source-aware retrieval"
 )
 
-
-# -----------------------------
-# Upload
-# -----------------------------
-
-st.header("📄 Upload Documents")
+st.header("Upload Documents")
 
 uploaded_files = st.file_uploader(
     "Choose one or more PDF documents",
@@ -30,15 +24,11 @@ uploaded_files = st.file_uploader(
 )
 
 if st.button("Upload Documents"):
-
     if not uploaded_files:
-
         st.warning("Please select at least one PDF.")
 
     else:
-
         for uploaded_file in uploaded_files:
-
             files = {
                 "file": (
                     uploaded_file.name,
@@ -48,7 +38,6 @@ if st.button("Upload Documents"):
             }
 
             try:
-
                 with st.spinner(
                     f"Processing {uploaded_file.name}..."
                 ):
@@ -59,7 +48,6 @@ if st.button("Upload Documents"):
                     )
 
                 if response.status_code == 200:
-
                     data = response.json()
 
                     st.success(
@@ -68,46 +56,35 @@ if st.button("Upload Documents"):
                     )
 
                 else:
-
                     st.error(
                         f"Upload failed: {response.text}"
                     )
 
             except requests.exceptions.ConnectionError:
-
                 st.error(
                     "Could not connect to the AskDocs backend."
                 )
 
 
-# -----------------------------
-# Get documents
-# -----------------------------
-
-st.header("📚 Your Documents")
+st.header("Your Documents")
 
 try:
-
     response = requests.get(
         f"{API_URL}/documents"
     )
 
     if response.status_code == 200:
-
         documents = response.json()["documents"]
 
         if not documents:
-
             st.info("No documents uploaded yet.")
 
         else:
-
             for document in documents:
-
                 col1, col2, col3 = st.columns([5, 1, 1])
 
                 with col1:
-                    st.write(f"📄 **{document['filename']}**")
+                    st.write(f"**{document['filename']}**")
 
                 with col2:
                     st.link_button(
@@ -143,28 +120,20 @@ try:
                             )
 
 except requests.exceptions.ConnectionError:
-
     st.warning(
         "Backend is not running."
     )
 
 
-# -----------------------------
-# Document selection
-# -----------------------------
-
-st.header("🔎 Search Scope")
+st.header("Search Scope")
 
 try:
-
     response = requests.get(
         f"{API_URL}/documents"
     )
 
     if response.status_code == 200:
-
         documents = response.json()["documents"]
-
         document_options = {
             document["filename"]: document["document_id"]
             for document in documents
@@ -195,12 +164,7 @@ try:
                     "Select at least one document."
                 )
 
-
-        # -----------------------------
-        # Question
-        # -----------------------------
-
-        st.header("💬 Ask a Question")
+        st.header("Ask a Question")
 
         question = st.text_input(
             "Enter your question",
@@ -208,28 +172,19 @@ try:
         )
 
         if st.button("Ask", type="primary"):
-
             if not question.strip():
-
-                st.warning(
-                    "Please enter a question."
-                )
+                st.warning("Please enter a question.")
 
             elif (
                 selected_scope == "Specific documents"
                 and not selected_document_ids
             ):
 
-                st.warning(
-                    "Please select at least one document."
-                )
+                st.warning("Please select at least one document.")
 
             else:
-
                 try:
-
                     with st.spinner("Searching documents..."):
-
                         response = requests.post(
                             f"{API_URL}/query",
                             json={
@@ -240,28 +195,14 @@ try:
                         )
 
                     if response.status_code == 200:
-
                         data = response.json()
-
-                        # -----------------------------
-                        # Answer
-                        # -----------------------------
-
                         st.subheader("Answer")
-
                         st.write(data["answer"])
-
-
-                        # -----------------------------
-                        # Group sources
-                        # -----------------------------
-
                         st.subheader("Sources")
 
                         grouped_sources = {}
 
                         for source in data["sources"]:
-
                             filename = source["document"]
                             page = source["page"]
 
@@ -272,16 +213,14 @@ try:
 
 
                         for filename, pages in grouped_sources.items():
-
                             page_list = sorted(pages)
-
                             pages_text = ", ".join(
                                 str(page)
                                 for page in page_list
                             )
 
                             st.write(
-                                f"📄 **{filename}**  \n"
+                                f"**{filename}**  \n"
                                 f"Pages: {pages_text}"
                             )
 
