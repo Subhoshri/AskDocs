@@ -9,9 +9,18 @@ class AnswerGenerator:
         if not api_key:
             raise ValueError("GEMINI_API_KEY is required.")
 
-        self.client = genai.Client(api_key=api_key)
+        self.client = genai.Client(
+            api_key=api_key
+        )
 
     def generate(self, question, retrieved_chunks):
+
+        if not retrieved_chunks:
+
+            return (
+                "I could not find enough relevant information "
+                "in the provided documents to answer this question."
+            )
 
         context_parts = []
 
@@ -35,21 +44,43 @@ Content:
         prompt = f"""
 You are an AI document question-answering assistant.
 
-Answer the user's question using ONLY the information
-provided in the context below.
+Your job is to answer the user's question using ONLY
+the information contained in the provided document excerpts.
+
+IMPORTANT:
+The retrieved excerpts may contain irrelevant information.
+Do NOT mention information merely because it appears in
+the context. Use only excerpts that are actually relevant
+to the user's question.
 
 Rules:
+
 1. Do not use outside knowledge.
-2. Do not invent facts.
-3. If the context does not contain enough information,
-   clearly say that the answer cannot be determined
-   from the provided documents.
-4. If multiple sources contain conflicting information,
-   explicitly identify the conflict.
-5. Do not arbitrarily choose one conflicting source.
-6. Mention the relevant document and page when presenting
-   information from a source.
-7. Keep the answer concise and clear.
+2. Do not invent or assume facts.
+3. Ignore irrelevant retrieved excerpts.
+4. If the available excerpts do not contain enough relevant
+   information, clearly say that the answer cannot be
+   determined from the provided documents.
+5. Keep answers concise and directly answer the question.
+6. Do not unnecessarily list every retrieved passage.
+7. When the user asks what a document is about, provide a
+   short high-level description of its main subject instead
+   of listing acknowledgements, copyright information,
+   indexes, references, or other incidental content.
+8. If multiple documents contain relevant information,
+   organize the answer by document.
+9. If relevant documents contain conflicting information,
+   explicitly identify the conflict and present both versions.
+10. Mention document names and page numbers when citing
+    information.
+
+For broad questions such as:
+"What is this document about?"
+"Summarize this document."
+"What does this document contain?"
+
+focus on the main purpose, subject, or content of the document,
+not incidental text.
 
 Context:
 {context}

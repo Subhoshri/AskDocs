@@ -87,3 +87,39 @@ class VectorStore:
         vector_store.metadata = metadata
 
         return vector_store
+
+    def delete_document(self, document_id):
+
+        keep_indices = [
+            i
+            for i, metadata in enumerate(self.metadata)
+            if metadata["document_id"] != document_id
+        ]
+    
+        if len(keep_indices) == len(self.metadata):
+            return False
+    
+        # Reconstruct vectors we want to keep
+        if keep_indices:
+            vectors = np.vstack([
+                self.index.reconstruct(i)
+                for i in keep_indices
+            ])
+    
+            new_index = faiss.IndexFlatIP(self.index.d)
+    
+            new_index.add(
+                vectors.astype("float32")
+            )
+    
+        else:
+            new_index = faiss.IndexFlatIP(self.index.d)
+    
+        self.index = new_index
+    
+        self.metadata = [
+            self.metadata[i]
+            for i in keep_indices
+        ]
+    
+        return True
