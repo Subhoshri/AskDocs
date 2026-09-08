@@ -91,43 +91,48 @@ class RAGPipeline:
 
         return len(chunks)
 
-    def retrieve(
-        self,
-        question,
-        top_k=5
-    ):
+    def retrieve(self, question, top_k=5, document_ids=None):
 
         if self.vector_store is None:
             return []
 
-        query_embedding = self.embedding_model.encode(
-            [question]
-        )[0]
+        query_embedding = self.embedding_model.encode([question])[0]
 
-        return self.vector_store.search(
+        # If no documents are selected, search everything
+        if not document_ids:
+            return self.vector_store.search(
+                query_embedding,
+                top_k=top_k
+            )
+
+        # Search all indexed chunks, then filter by document
+        all_results = self.vector_store.search(
             query_embedding,
-            top_k=top_k
+            top_k=self.vector_store.index.ntotal
         )
 
-    def answer(
-        self,
-        question,
-        top_k=5
-    ):
+        filtered_results = [
+            result
+            for result in all_results
+            if result["metadata"]["document_id"] in document_ids
+        ]
+
+        return filtered_results[:top_k]
+
+    def answer(self, question, top_k=5, document_ids=None):
 
         retrieved_chunks = self.retrieve(
             question,
-            top_k=top_k
+            top_k=top_k,
+            document_ids=document_ids
         )
-
+    
         if self.answer_generator is None:
-            raise ValueError(
-                "GEMINI_API_KEY is not configured."
-            )
-
+            raise ValueError("GEMINI_API_KEY is not configured.")
+    
         answer = self.answer_generator.generate(
             question,
             retrieved_chunks
         )
-
+    
         return answer, retrieved_chunks

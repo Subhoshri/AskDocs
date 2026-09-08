@@ -8,30 +8,37 @@ API_URL = "http://127.0.0.1:8000"
 st.set_page_config(
     page_title="AskDocs",
     page_icon="📚",
-    layout="centered"
+    layout="wide"
 )
 
 
+# -----------------------------
+# Header
+# -----------------------------
+
 st.title("📚 AskDocs")
-st.caption("AI-powered document question-answering system")
+st.caption(
+    "AI-powered document question-answering with "
+    "source-aware retrieval"
+)
 
 
 # -----------------------------
-# Upload documents
+# Upload
 # -----------------------------
 
-st.header("Upload Documents")
+st.header("📄 Upload Documents")
 
 uploaded_files = st.file_uploader(
-    "Choose PDF files",
+    "Choose one or more PDF documents",
     type=["pdf"],
     accept_multiple_files=True
 )
 
-
 if st.button("Upload Documents"):
 
     if not uploaded_files:
+
         st.warning("Please select at least one PDF.")
 
     else:
@@ -48,18 +55,22 @@ if st.button("Upload Documents"):
 
             try:
 
-                response = requests.post(
-                    f"{API_URL}/documents/upload",
-                    files=files
-                )
+                with st.spinner(
+                    f"Processing {uploaded_file.name}..."
+                ):
+
+                    response = requests.post(
+                        f"{API_URL}/documents/upload",
+                        files=files
+                    )
 
                 if response.status_code == 200:
 
                     data = response.json()
 
                     st.success(
-                        f"{data['filename']} uploaded successfully "
-                        f"({data['chunks_indexed']} chunks)"
+                        f"✓ {data['filename']} "
+                        f"({data['chunks_indexed']} chunks indexed)"
                     )
 
                 else:
@@ -76,59 +87,202 @@ if st.button("Upload Documents"):
 
 
 # -----------------------------
-# Ask questions
+# Get documents
 # -----------------------------
 
-st.header("Ask a Question")
+st.header("📚 Your Documents")
 
-question = st.text_input(
-    "Enter your question"
-)
+try:
 
+    response = requests.get(
+        f"{API_URL}/documents"
+    )
 
-if st.button("Ask"):
+    if response.status_code == 200:
 
-    if not question.strip():
+        documents = response.json()["documents"]
 
-        st.warning("Please enter a question.")
+        if not documents:
 
-    else:
+            st.info("No documents uploaded yet.")
 
-        try:
+        else:
 
-            response = requests.post(
-                f"{API_URL}/query",
-                json={
-                    "question": question,
-                    "top_k": 8
-                }
-            )
+            for document in documents:
 
-            if response.status_code == 200:
+                col1, col2 = st.columns([5, 1])
 
-                data = response.json()
-
-                st.subheader("Answer")
-
-                st.write(data["answer"])
-
-                st.subheader("Sources")
-
-                for source in data["sources"]:
+                with col1:
 
                     st.write(
-                        f"📄 {source['document']} "
-                        f"· Page {source['page']}"
+                        f"📄 **{document['filename']}**"
                     )
+
+                with col2:
+
+                    st.link_button(
+                        "View",
+                        f"{API_URL}/documents/"
+                        f"{document['document_id']}/file"
+                    )
+
+except requests.exceptions.ConnectionError:
+
+    st.warning(
+        "Backend is not running."
+    )
+
+
+# -----------------------------
+# Document selection
+# -----------------------------
+
+st.header("🔎 Search Scope")
+
+try:
+
+    response = requests.get(
+        f"{API_URL}/documents"
+    )
+
+    if response.status_code == 200:
+
+        documents = response.json()["documents"]
+
+        document_options = {
+            document["filename"]: document["document_id"]
+            for document in documents
+        }
+
+        selected_scope = st.radio(
+            "Where should AskDocs search?",
+            ["All documents", "Specific documents"]
+        )
+
+        selected_document_ids = None
+
+        if selected_scope == "Specific documents":
+
+            selected_names = st.multiselect(
+                "Select documents",
+                options=list(document_options.keys())
+            )
+
+            selected_document_ids = [
+                document_options[name]
+                for name in selected_names
+            ]
+
+            if not selected_document_ids:
+
+                st.info(
+                    "Select at least one document."
+                )
+
+
+        # -----------------------------
+        # Question
+        # -----------------------------
+
+        st.header("💬 Ask a Question")
+
+        question = st.text_input(
+            "Enter your question",
+            placeholder="e.g. What projects are mentioned?"
+        )
+
+        if st.button("Ask", type="primary"):
+
+            if not question.strip():
+
+                st.warning(
+                    "Please enter a question."
+                )
+
+            elif (
+                selected_scope == "Specific documents"
+                and not selected_document_ids
+            ):
+
+                st.warning(
+                    "Please select at least one document."
+                )
 
             else:
 
-                st.error(
-                    f"Query failed: {response.text}"
-                )
+                try:
 
-        except requests.exceptions.ConnectionError:
+                    with st.spinner("Searching documents..."):
 
-            st.error(
-                "Could not connect to the AskDocs backend."
-            )
+                        response = requests.post(
+                            f"{API_URL}/query",
+                            json={
+                                "question": question,
+                                "top_k": 8,
+                                "document_ids": selected_document_ids
+                            }
+                        )
+
+                    if response.status_code == 200:
+
+                        data = response.json()
+
+                        # -----------------------------
+                        # Answer
+                        # -----------------------------
+
+                        st.subheader("Answer")
+
+                        st.write(data["answer"])
+
+
+                        # -----------------------------
+                        # Group sources
+                        # -----------------------------
+
+                        st.subheader("Sources")
+
+                        grouped_sources = {}
+
+                        for source in data["sources"]:
+
+                            filename = source["document"]
+                            page = source["page"]
+
+                            if filename not in grouped_sources:
+                                grouped_sources[filename] = set()
+
+                            grouped_sources[filename].add(page)
+
+
+                        for filename, pages in grouped_sources.items():
+
+                            page_list = sorted(pages)
+
+                            pages_text = ", ".join(
+                                str(page)
+                                for page in page_list
+                            )
+
+                            st.write(
+                                f"📄 **{filename}**  \n"
+                                f"Pages: {pages_text}"
+                            )
+
+                    else:
+
+                        st.error(
+                            f"Query failed: {response.text}"
+                        )
+
+                except requests.exceptions.ConnectionError:
+
+                    st.error(
+                        "Could not connect to the AskDocs backend."
+                    )
+
+except requests.exceptions.ConnectionError:
+
+    st.warning(
+        "Could not connect to the AskDocs backend."
+    )

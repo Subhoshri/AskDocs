@@ -5,6 +5,7 @@ import shutil
 import uuid
 from typing import List
 from dotenv import load_dotenv
+from fastapi.responses import FileResponse
 
 load_dotenv()
 from .rag_pipeline import RAGPipeline
@@ -27,8 +28,8 @@ pipeline = RAGPipeline()
 
 class QueryRequest(BaseModel):
     question: str
-    top_k: int = Field(default=5, ge=1, le=10)
-
+    top_k: int = 5
+    document_ids: list[str] | None = None
 
 @app.get("/")
 def root():
@@ -38,10 +39,42 @@ def root():
 
 @app.get("/documents")
 def list_documents():
+
+    if pipeline.vector_store is None:
+        return {"documents": []}
+
+    documents = {}
+
+    for metadata in pipeline.vector_store.metadata:
+
+        document_id = metadata["document_id"]
+
+        if document_id not in documents:
+            documents[document_id] = {
+                "document_id": document_id,
+                "filename": metadata["filename"]
+            }
+
     return {
-        "documents": list(DOCUMENTS.values())
+        "documents": list(documents.values())
     }
-    
+
+@app.get("/documents/{document_id}/file")
+def view_document(document_id: str):
+
+    file_path = UPLOAD_DIR / f"{document_id}.pdf"
+
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found."
+        )
+
+    return FileResponse(
+        path=file_path,
+        media_type="application/pdf"
+    )
+
 @app.post("/documents/upload")
 async def upload_document(
     file: UploadFile = File(...)
@@ -110,8 +143,9 @@ def query_documents(request: QueryRequest):
     try:
 
         answer, results = pipeline.answer(
-            request.question,
-            top_k=request.top_k
+        request.question,
+        top_k=request.top_k,
+        document_ids=request.document_ids
         )
 
     except Exception as e:
