@@ -1,10 +1,11 @@
 from backend.chunker import chunk_pages
 
-def test_chunk_pages():
+
+def test_chunking():
     pages = [
         {
             "page_number": 1,
-            "text": "A" * 2500
+            "text": "a" * 2500
         }
     ]
 
@@ -15,8 +16,35 @@ def test_chunk_pages():
     )
 
     assert len(chunks) > 1
+    assert all(
+        "text" in chunk and
+        "page_number" in chunk
+        for chunk in chunks
+    )
 
-    for chunk in chunks:
-        assert "text" in chunk
-        assert "page_number" in chunk
-        assert chunk["page_number"] == 1
+
+def test_short_text():
+    pages = [
+        {
+            "page_number": 1,
+            "text": "Short document."
+        }
+    ]
+
+    chunks = chunk_pages(pages)
+
+    assert len(chunks) == 1
+    assert chunks[0]["text"] == "Short document."
+
+
+def test_page_number_preserved():
+    pages = [
+        {
+            "page_number": 3,
+            "text": "Some content."
+        }
+    ]
+
+    chunks = chunk_pages(pages)
+
+    assert chunks[0]["page_number"] == 3
