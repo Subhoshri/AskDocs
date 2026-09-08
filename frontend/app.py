@@ -1,9 +1,7 @@
 import streamlit as st
 import requests
 
-
 API_URL = "http://127.0.0.1:8000"
-
 
 st.set_page_config(
     page_title="AskDocs",
@@ -11,10 +9,6 @@ st.set_page_config(
     layout="wide"
 )
 
-
-# -----------------------------
-# Header
-# -----------------------------
 
 st.title("📚 AskDocs")
 st.caption(
@@ -110,21 +104,43 @@ try:
 
             for document in documents:
 
-                col1, col2 = st.columns([5, 1])
+                col1, col2, col3 = st.columns([5, 1, 1])
 
                 with col1:
-
-                    st.write(
-                        f"📄 **{document['filename']}**"
-                    )
+                    st.write(f"📄 **{document['filename']}**")
 
                 with col2:
-
                     st.link_button(
                         "View",
                         f"{API_URL}/documents/"
                         f"{document['document_id']}/file"
                     )
+
+                with col3:
+                    if st.button(
+                        "Delete",
+                        key=f"delete_{document['document_id']}"
+                    ):
+                        try:
+                            response = requests.delete(
+                                f"{API_URL}/documents/"
+                                f"{document['document_id']}"
+                            )
+
+                            if response.status_code == 200:
+                                st.success(
+                                    f"Deleted {document['filename']}"
+                                )
+                                st.rerun()
+                            else:
+                                st.error(
+                                    f"Delete failed: {response.text}"
+                                )
+
+                        except requests.exceptions.ConnectionError:
+                            st.error(
+                                "Could not connect to the AskDocs backend."
+                            )
 
 except requests.exceptions.ConnectionError:
 

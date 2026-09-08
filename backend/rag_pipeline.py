@@ -1,15 +1,12 @@
 import os
 from pathlib import Path
-
 from .document_processor import extract_text_from_pdf
 from .chunker import chunk_pages
 from .embeddings import EmbeddingModel
 from .vector_store import VectorStore
 from .rag import AnswerGenerator
 
-
 class RAGPipeline:
-
     def __init__(self):
         self.min_relevance_score = 0.35
         self.embedding_model = EmbeddingModel()
@@ -31,27 +28,20 @@ class RAGPipeline:
 
         # Initialize answer generator
         api_key = os.getenv("GEMINI_API_KEY")
-
         self.answer_generator = None
 
         if api_key:
             self.answer_generator = AnswerGenerator(api_key)
 
-    def get_document_overview_chunks(
-        self,
-        document_ids=None,
-        chunks_per_document=2
-    ):
+    def get_document_overview_chunks(self,document_ids=None,chunks_per_document=2):
 
         if self.vector_store is None:
             return []
 
         selected = []
-
         seen_documents = set()
 
         for metadata in self.vector_store.metadata:
-
             document_id = metadata["document_id"]
 
             if document_ids and document_id not in document_ids:
@@ -87,15 +77,8 @@ class RAGPipeline:
             for metadata in selected
         ]
 
-    def index_document(
-        self,
-        file_path,
-        document_id,
-        filename
-    ):
-
+    def index_document(self,file_path,document_id,filename):
         pages = extract_text_from_pdf(file_path)
-
         chunks = chunk_pages(pages)
 
         if not chunks:
@@ -114,62 +97,29 @@ class RAGPipeline:
             for chunk in chunks
         ]
 
-        embeddings = self.embedding_model.encode(
-            texts
-        )
+        embeddings = self.embedding_model.encode(texts)
 
-        # Create vector store if this is the first document
         if self.vector_store is None:
-
             dimension = embeddings.shape[1]
-
-            self.vector_store = VectorStore(
-                dimension
-            )
+            self.vector_store = VectorStore(dimension)
 
         # Add new document to existing collection
-        self.vector_store.add(
-            embeddings,
-            chunks
-        )
+        self.vector_store.add(embeddings,chunks)
 
         # Persist updated collection
-        self.vector_store.save(
-            self.index_path,
-            self.metadata_path
-        )
+        self.vector_store.save(self.index_path,self.metadata_path)
 
         return len(chunks)
 
-    def retrieve(
-        self,
-        question,
-        top_k=5,
-        document_ids=None
-    ):
-
+    def retrieve(self,question,top_k=5,document_ids=None):
         if self.vector_store is None:
             return []
 
-        query_embedding = self.embedding_model.encode(
-            [question]
-        )[0]
+        query_embedding = self.embedding_model.encode([question])[0]
 
-        # Retrieve more candidates first.
-        # We will filter and diversify them afterwards.
-        candidate_k = min(
-            20,
-            self.vector_store.index.ntotal
-        )
+        candidate_k = min(20,self.vector_store.index.ntotal)
 
-        results = self.vector_store.search(
-            query_embedding,
-            top_k=candidate_k
-        )
-
-        # ---------------------------------
-        # 1. Filter by selected documents
-        # ---------------------------------
+        results = self.vector_store.search(query_embedding,top_k=candidate_k)
 
         if document_ids:
 
@@ -180,9 +130,6 @@ class RAGPipeline:
                 in document_ids
             ]
 
-        # ---------------------------------
-        # 2. Remove weakly relevant results
-        # ---------------------------------
         self.min_relevance_score
         results = [
         result
@@ -190,13 +137,7 @@ class RAGPipeline:
         if result["score"] >= self.min_relevance_score
         ]
 
-        # ---------------------------------
-        # 3. Prevent one document
-        #    from dominating retrieval
-        # ---------------------------------
-
         if not document_ids:
-
             document_counts = {}
             diversified_results = []
 
@@ -204,29 +145,19 @@ class RAGPipeline:
 
                 document_id = result["metadata"]["document_id"]
 
-                count = document_counts.get(
-                    document_id,
-                    0
-                )
+                count = document_counts.get(document_id,0)
 
                 if count >= 2:
                     continue
 
                 diversified_results.append(result)
-
                 document_counts[document_id] = count + 1
 
             results = diversified_results
 
         return results[:top_k]
 
-    def answer(
-        self,
-        question,
-        top_k=5,
-        document_ids=None
-    ):
-
+    def answer(self,question,top_k=5,document_ids=None):
         summary_keywords = [
             "what is this document about",
             "what is the document about",
@@ -242,14 +173,12 @@ class RAGPipeline:
         )
 
         if is_summary_question:
-
             retrieved_chunks = self.get_document_overview_chunks(
                 document_ids=document_ids,
                 chunks_per_document=2
             )
 
         else:
-
             retrieved_chunks = self.retrieve(
                 question,
                 top_k=top_k,
@@ -261,28 +190,18 @@ class RAGPipeline:
                 "GEMINI_API_KEY is not configured."
             )
 
-        answer = self.answer_generator.generate(
-            question,
-            retrieved_chunks
-        )
+        answer = self.answer_generator.generate(question,retrieved_chunks)
 
         return answer, retrieved_chunks
 
     def delete_document(self, document_id):
-
         if self.vector_store is None:
             return False
 
-        deleted = self.vector_store.delete_document(
-            document_id
-        )
+        deleted = self.vector_store.delete_document(document_id)
 
         if not deleted:
             return False
 
-        self.vector_store.save(
-            self.index_path,
-            self.metadata_path
-        )
-
+        self.vector_store.save(self.index_path,self.metadata_path)
         return True

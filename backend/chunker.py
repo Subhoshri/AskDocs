@@ -2,7 +2,7 @@ def chunk_pages(pages, chunk_size=1000, overlap=200):
     """
     Split extracted page text into overlapping chunks. Each chunk preserves its source page number.
     """
-
+    
     chunks = []
 
     for page in pages:

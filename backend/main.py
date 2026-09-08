@@ -5,9 +5,7 @@ import shutil
 import uuid
 from typing import List
 from fastapi.responses import FileResponse
-
 from dotenv import load_dotenv
-from fastapi.responses import FileResponse
 import hashlib
 
 load_dotenv()
@@ -18,7 +16,6 @@ app = FastAPI(
     description="AI-powered document question-answering system",
     version="1.0.0"
 )
-
 
 # Temporary local storage for uploaded documents
 UPLOAD_DIR = Path("data/uploads")
@@ -44,9 +41,7 @@ def calculate_file_hash(file_path):
 
     return sha256.hexdigest()
 
-# Create RAG pipeline
 pipeline = RAGPipeline()
-
 
 class QueryRequest(BaseModel):
     question: str
@@ -61,14 +56,12 @@ def root():
 
 @app.get("/documents")
 def list_documents():
-
     if pipeline.vector_store is None:
         return {"documents": []}
 
     documents = {}
 
     for metadata in pipeline.vector_store.metadata:
-
         document_id = metadata["document_id"]
 
         if document_id not in documents:
@@ -83,7 +76,6 @@ def list_documents():
 
 @app.get("/documents/{document_id}/file")
 def view_document(document_id: str):
-
     file_path = UPLOAD_DIR / f"{document_id}.pdf"
 
     if not file_path.exists():
@@ -99,58 +91,43 @@ def view_document(document_id: str):
 
 @app.post("/documents/upload")
 async def upload_document(file: UploadFile = File(...)):
-
-    # 1. Check extension
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=400,
             detail="Only PDF files are supported."
         )
 
-    # 2. Read uploaded file
     file_contents = await file.read()
 
-    # 3. Check file size
     if len(file_contents) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=413,
             detail="File is too large. Maximum size is 20 MB."
         )
 
-    # 4. Check PDF signature
     if not file_contents.startswith(b"%PDF-"):
         raise HTTPException(
             status_code=400,
             detail="Invalid PDF file."
         )
 
-    # 5. Calculate hash
     file_hash = hashlib.sha256(file_contents).hexdigest()
 
-    # 6. Check for duplicate content
     if pipeline.vector_store is not None:
-
         checked_documents = set()
 
         for metadata in pipeline.vector_store.metadata:
-
             document_id = metadata["document_id"]
-
             if document_id in checked_documents:
                 continue
 
             checked_documents.add(document_id)
-
-            existing_file_path = (
-                UPLOAD_DIR / f"{document_id}.pdf"
-            )
+            existing_file_path = (UPLOAD_DIR / f"{document_id}.pdf")
 
             if not existing_file_path.exists():
                 continue
 
-            existing_hash = calculate_file_hash(
-                existing_file_path
-            )
+            existing_hash = calculate_file_hash(existing_file_path)
 
             if existing_hash == file_hash:
                 raise HTTPException(
@@ -162,16 +139,12 @@ async def upload_document(file: UploadFile = File(...)):
                     )
                 )
 
-    # 7. Generate unique ID
     document_id = str(uuid.uuid4())
-
     file_path = UPLOAD_DIR / f"{document_id}.pdf"
 
-    # 8. Save file
     with open(file_path, "wb") as buffer:
         buffer.write(file_contents)
 
-    # 9. Process and index document
     try:
 
         num_chunks = pipeline.index_document(
@@ -181,7 +154,6 @@ async def upload_document(file: UploadFile = File(...)):
         )
 
     except Exception as e:
-
         if file_path.exists():
             file_path.unlink()
 
@@ -190,7 +162,6 @@ async def upload_document(file: UploadFile = File(...)):
             detail=f"Document processing failed: {str(e)}"
         )
 
-    # 10. Return result
     return {
         "document_id": document_id,
         "filename": file.filename,
@@ -200,7 +171,6 @@ async def upload_document(file: UploadFile = File(...)):
 
 @app.post("/query")
 def query_documents(request: QueryRequest):
-
     if pipeline.vector_store is None:
         raise HTTPException(
             status_code=400,
@@ -214,7 +184,6 @@ def query_documents(request: QueryRequest):
         )
 
     try:
-
         answer, results = pipeline.answer(
         request.question,
         top_k=request.top_k,
@@ -222,16 +191,10 @@ def query_documents(request: QueryRequest):
         )
 
     except Exception as e:
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Answer generation failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500,detail=f"Answer generation failed: {str(e)}")
 
     sources = []
-
     for result in results:
-
         metadata = result["metadata"]
 
         sources.append({
@@ -249,9 +212,7 @@ def query_documents(request: QueryRequest):
 
 @app.delete("/documents/{document_id}")
 def delete_document(document_id: str):
-
     file_path = UPLOAD_DIR / f"{document_id}.pdf"
-
     deleted = pipeline.delete_document(document_id)
 
     if not deleted:

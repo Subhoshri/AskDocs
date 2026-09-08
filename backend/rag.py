@@ -1,20 +1,14 @@
 import os
 from google import genai
 
-
 class AnswerGenerator:
-
     def __init__(self, api_key):
-
         if not api_key:
             raise ValueError("GEMINI_API_KEY is required.")
 
-        self.client = genai.Client(
-            api_key=api_key
-        )
+        self.client = genai.Client(api_key=api_key)
 
     def generate(self, question, retrieved_chunks):
-
         if not retrieved_chunks:
 
             return (
