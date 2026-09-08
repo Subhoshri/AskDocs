@@ -1,5 +1,8 @@
 import faiss
 import numpy as np
+import json
+from pathlib import Path
+
 
 class VectorStore:
 
@@ -8,6 +11,7 @@ class VectorStore:
         self.metadata = []
 
     def add(self, embeddings, metadata):
+
         embeddings = np.asarray(
             embeddings,
             dtype="float32"
@@ -41,3 +45,45 @@ class VectorStore:
             })
 
         return results
+
+    def save(self, index_path, metadata_path):
+
+        faiss.write_index(
+            self.index,
+            str(index_path)
+        )
+
+        with open(
+            metadata_path,
+            "w",
+            encoding="utf-8"
+        ) as file:
+
+            json.dump(
+                self.metadata,
+                file,
+                ensure_ascii=False,
+                indent=2
+            )
+
+    @classmethod
+    def load(cls, index_path, metadata_path):
+
+        index = faiss.read_index(
+            str(index_path)
+        )
+
+        with open(
+            metadata_path,
+            "r",
+            encoding="utf-8"
+        ) as file:
+
+            metadata = json.load(file)
+
+        vector_store = cls(index.d)
+
+        vector_store.index = index
+        vector_store.metadata = metadata
+
+        return vector_store

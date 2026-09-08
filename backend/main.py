@@ -1,8 +1,9 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pathlib import Path
 import shutil
 import uuid
+from typing import List
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,7 +19,7 @@ app = FastAPI(
 # Temporary local storage for uploaded documents
 UPLOAD_DIR = Path("data/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
+DOCUMENTS = {}
 
 # Create RAG pipeline
 pipeline = RAGPipeline()
@@ -26,7 +27,7 @@ pipeline = RAGPipeline()
 
 class QueryRequest(BaseModel):
     question: str
-    top_k: int = 5
+    top_k: int = Field(default=5, ge=1, le=10)
 
 
 @app.get("/")
@@ -35,60 +36,60 @@ def root():
         "message": "DocQuery API is running"
     }
 
-
+@app.get("/documents")
+def list_documents():
+    return {
+        "documents": list(DOCUMENTS.values())
+    }
+    
 @app.post("/documents/upload")
-async def upload_documents(
-    files: list[UploadFile] = File(...)
+async def upload_document(
+    file: UploadFile = File(...)
 ):
 
-    if not files:
+    if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=400,
-            detail="At least one PDF file is required."
+            detail="Only PDF files are supported."
         )
 
-    uploaded_documents = []
+    document_id = str(uuid.uuid4())
 
-    for file in files:
+    file_path = UPLOAD_DIR / f"{document_id}.pdf"
 
-        if not file.filename.lower().endswith(".pdf"):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Only PDF files are supported: {file.filename}"
-            )
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
 
-        document_id = str(uuid.uuid4())
+    try:
 
-        file_path = UPLOAD_DIR / f"{document_id}.pdf"
+        num_chunks = pipeline.index_document(
+            file_path=str(file_path),
+            document_id=document_id,
+            filename=file.filename
+        )
 
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
 
-        try:
+        if file_path.exists():
+            file_path.unlink()
 
-            num_chunks = pipeline.index_document(
-                file_path=str(file_path),
-                document_id=document_id,
-                filename=file.filename
-            )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Document processing failed: {str(e)}"
+        )
 
-        except Exception as e:
-
-            raise HTTPException(
-                status_code=500,
-                detail=f"Document processing failed for {file.filename}: {str(e)}"
-            )
-
-        uploaded_documents.append({
-            "document_id": document_id,
-            "filename": file.filename,
-            "status": "READY",
-            "chunks_indexed": num_chunks
-        })
+    DOCUMENTS[document_id] = {
+    "document_id": document_id,
+    "filename": file.filename,
+    "status": "READY",
+    "chunks_indexed": num_chunks
+    }
 
     return {
-        "documents_uploaded": len(uploaded_documents),
-        "documents": uploaded_documents
+        "document_id": document_id,
+        "filename": file.filename,
+        "status": "READY",
+        "chunks_indexed": num_chunks
     }
 
 @app.post("/query")

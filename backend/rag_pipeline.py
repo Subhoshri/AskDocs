@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from .document_processor import extract_text_from_pdf
 from .chunker import chunk_pages
@@ -12,8 +13,23 @@ class RAGPipeline:
     def __init__(self):
 
         self.embedding_model = EmbeddingModel()
+
+        self.index_path = Path("data/faiss.index")
+        self.metadata_path = Path("data/metadata.json")
+
         self.vector_store = None
 
+        # Load existing vector store if available
+        if (
+            self.index_path.exists()
+            and self.metadata_path.exists()
+        ):
+            self.vector_store = VectorStore.load(
+                self.index_path,
+                self.metadata_path
+            )
+
+        # Initialize answer generator
         api_key = os.getenv("GEMINI_API_KEY")
 
         self.answer_generator = None
@@ -32,6 +48,11 @@ class RAGPipeline:
 
         chunks = chunk_pages(pages)
 
+        if not chunks:
+            raise ValueError(
+                "No extractable text found in the PDF."
+            )
+
         for index, chunk in enumerate(chunks):
 
             chunk["document_id"] = document_id
@@ -43,8 +64,11 @@ class RAGPipeline:
             for chunk in chunks
         ]
 
-        embeddings = self.embedding_model.encode(texts)
+        embeddings = self.embedding_model.encode(
+            texts
+        )
 
+        # Create vector store if this is the first document
         if self.vector_store is None:
 
             dimension = embeddings.shape[1]
@@ -53,9 +77,16 @@ class RAGPipeline:
                 dimension
             )
 
+        # Add new document to existing collection
         self.vector_store.add(
             embeddings,
             chunks
+        )
+
+        # Persist updated collection
+        self.vector_store.save(
+            self.index_path,
+            self.metadata_path
         )
 
         return len(chunks)
@@ -65,6 +96,9 @@ class RAGPipeline:
         question,
         top_k=5
     ):
+
+        if self.vector_store is None:
+            return []
 
         query_embedding = self.embedding_model.encode(
             [question]
