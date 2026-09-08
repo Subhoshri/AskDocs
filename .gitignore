@@ -1,4 +1,8 @@
-.env
 venv/
+.env
 __pycache__/
 *.pyc
+
+data/uploads/
+data/*.faiss
+data/*.json

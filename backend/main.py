@@ -3,7 +3,9 @@ from pydantic import BaseModel
 from pathlib import Path
 import shutil
 import uuid
+from dotenv import load_dotenv
 
+load_dotenv()
 from .rag_pipeline import RAGPipeline
 
 app = FastAPI(
@@ -35,43 +37,59 @@ def root():
 
 
 @app.post("/documents/upload")
-async def upload_document(
-    file: UploadFile = File(...)
+async def upload_documents(
+    files: list[UploadFile] = File(...)
 ):
 
-    if not file.filename.lower().endswith(".pdf"):
+    if not files:
         raise HTTPException(
             status_code=400,
-            detail="Only PDF files are supported."
+            detail="At least one PDF file is required."
         )
 
-    document_id = str(uuid.uuid4())
+    uploaded_documents = []
 
-    file_path = UPLOAD_DIR / f"{document_id}.pdf"
+    for file in files:
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        if not file.filename.lower().endswith(".pdf"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Only PDF files are supported: {file.filename}"
+            )
 
-    try:
-        num_chunks = pipeline.index_document(
-            file_path=str(file_path),
-            document_id=document_id,
-            filename=file.filename
-        )
+        document_id = str(uuid.uuid4())
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Document processing failed: {str(e)}"
-        )
+        file_path = UPLOAD_DIR / f"{document_id}.pdf"
+
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        try:
+
+            num_chunks = pipeline.index_document(
+                file_path=str(file_path),
+                document_id=document_id,
+                filename=file.filename
+            )
+
+        except Exception as e:
+
+            raise HTTPException(
+                status_code=500,
+                detail=f"Document processing failed for {file.filename}: {str(e)}"
+            )
+
+        uploaded_documents.append({
+            "document_id": document_id,
+            "filename": file.filename,
+            "status": "READY",
+            "chunks_indexed": num_chunks
+        })
 
     return {
-        "document_id": document_id,
-        "filename": file.filename,
-        "status": "READY",
-        "chunks_indexed": num_chunks
+        "documents_uploaded": len(uploaded_documents),
+        "documents": uploaded_documents
     }
-
 
 @app.post("/query")
 def query_documents(request: QueryRequest):
@@ -88,10 +106,19 @@ def query_documents(request: QueryRequest):
             detail="Question cannot be empty."
         )
 
-    results = pipeline.retrieve(
-        request.question,
-        top_k=request.top_k
-    )
+    try:
+
+        answer, results = pipeline.answer(
+            request.question,
+            top_k=request.top_k
+        )
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Answer generation failed: {str(e)}"
+        )
 
     sources = []
 
@@ -107,6 +134,6 @@ def query_documents(request: QueryRequest):
 
     return {
         "question": request.question,
-        "retrieved_chunks": results,
+        "answer": answer,
         "sources": sources
     }

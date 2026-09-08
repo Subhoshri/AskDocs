@@ -1,28 +1,32 @@
 import os
-
 from google import genai
 
 
 class AnswerGenerator:
 
     def __init__(self, api_key):
+
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY is required.")
+
         self.client = genai.Client(api_key=api_key)
 
     def generate(self, question, retrieved_chunks):
 
         context_parts = []
 
-        for chunk in retrieved_chunks:
-            metadata = chunk["metadata"]
+        for result in retrieved_chunks:
+
+            metadata = result["metadata"]
 
             context_parts.append(
                 f"""
 [Source]
-Document: {metadata['filename']}
-Page: {metadata['page_number']}
+Document: {metadata["filename"]}
+Page: {metadata["page_number"]}
 
 Content:
-{metadata['text']}
+{metadata["text"]}
 """
             )
 
@@ -52,6 +56,8 @@ Context:
 
 Question:
 {question}
+
+Answer:
 """
 
         response = self.client.models.generate_content(
