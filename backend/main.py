@@ -1,9 +1,8 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from pathlib import Path
 import shutil
 import uuid
-from typing import List
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 import hashlib
@@ -20,21 +19,10 @@ app = FastAPI(
 # Temporary local storage for uploaded documents
 UPLOAD_DIR = Path("data/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-DOCUMENTS = {}
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
 def calculate_file_hash(file_path):
     sha256 = hashlib.sha256()
-
-    with open(file_path, "rb") as file:
-        while chunk := file.read(8192):
-            sha256.update(chunk)
-
-    return sha256.hexdigest()
-
-def calculate_file_hash(file_path):
-    sha256 = hashlib.sha256()
-
     with open(file_path, "rb") as file:
         while chunk := file.read(8192):
             sha256.update(chunk)
