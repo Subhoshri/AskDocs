@@ -6,3 +6,5 @@ __pycache__/
 data/uploads/
 data/*.faiss
 data/*.json
+data/faiss.index
+data/metadata.json
