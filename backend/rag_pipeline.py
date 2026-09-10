@@ -8,7 +8,7 @@ from .rag import AnswerGenerator
 
 class RAGPipeline:
     def __init__(self):
-        self.min_relevance_score = 0.35
+        self.min_relevance_score = 0.25
         self.embedding_model = EmbeddingModel()
 
         self.index_path = Path("data/faiss.index")
